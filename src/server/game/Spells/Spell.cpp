@@ -2929,7 +2929,7 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
     {
         if (missInfo != SPELL_MISS_EVADE && !m_caster->IsFriendlyTo(effectUnit) && (!m_spellInfo->IsPositive() || m_spellInfo->HasEffect(SPELL_EFFECT_DISPEL)))
         {
-            if (!m_triggeredByAuraSpell.spellInfo || (!(m_triggeredByAuraSpell.spellInfo->Effects[m_triggeredByAuraSpell.effectIndex].TriggerSpell == m_spellInfo->Id) && !(m_triggeredByAuraSpell.spellInfo->IsAuraEffectEqual(m_spellInfo))))
+            if (!m_triggeredByAuraSpell.spellInfo || m_damage || (!(m_triggeredByAuraSpell.spellInfo->Effects[m_triggeredByAuraSpell.effectIndex].TriggerSpell == m_spellInfo->Id) && !(m_triggeredByAuraSpell.spellInfo->IsAuraEffectEqual(m_spellInfo))))
                 m_caster->CombatStart(effectUnit, !(m_spellInfo->AttributesEx3 & SPELL_ATTR3_SUPRESS_TARGET_PROCS));
 
             // Patch 3.0.8: All player spells which cause a creature to become aggressive to you will now also immediately cause the creature to be tapped.
@@ -7525,9 +7525,9 @@ SpellCastResult Spell::CheckItems()
                     // Xinef: Apply item level restriction if the enchanting spell has max level restrition set
                     if (m_CastItem && m_spellInfo->MaxLevel > 0)
                     {
-                        if (item->GetTemplate()->ItemLevel < m_CastItem->GetTemplate()->RequiredLevel)
+                        if (item->GetTemplate()->RequiredLevel < m_CastItem->GetTemplate()->RequiredLevel)
                             return SPELL_FAILED_LOWLEVEL;
-                        if (item->GetTemplate()->ItemLevel > m_spellInfo->MaxLevel)
+                        if (item->GetTemplate()->RequiredLevel > m_spellInfo->MaxLevel)
                             return SPELL_FAILED_HIGHLEVEL;
                     }
 
