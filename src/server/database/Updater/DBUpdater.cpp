@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -23,9 +23,11 @@
 #include "Log.h"
 #include "StartProcess.h"
 #include "UpdateFetcher.h"
+#include "QueryResult.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <vector>
 
 std::string DBUpdaterUtil::GetCorrectedMySQLExecutable()
 {
@@ -62,6 +64,22 @@ std::string& DBUpdaterUtil::corrected_path()
     return path;
 }
 
+uint32& DBUpdaterUtil::failed_updates()
+{
+    static uint32 count = 0;
+    return count;
+}
+
+void DBUpdaterUtil::MarkUpdateFailed()
+{
+    ++failed_updates();
+}
+
+uint32 DBUpdaterUtil::GetFailedUpdateCount()
+{
+    return failed_updates();
+}
+
 // Auth Database
 template<>
 std::string DBUpdater<LoginDatabaseConnection>::GetConfigEntry()
@@ -76,9 +94,15 @@ std::string DBUpdater<LoginDatabaseConnection>::GetTableName()
 }
 
 template<>
+std::string DBUpdater<LoginDatabaseConnection>::GetSourceDirectory()
+{
+    return BuiltInConfig::GetSourceDirectory();
+}
+
+template<>
 std::string DBUpdater<LoginDatabaseConnection>::GetBaseFilesDirectory()
 {
-    return BuiltInConfig::GetSourceDirectory() + "/data/sql/base/db_auth/";
+    return DBUpdater<LoginDatabaseConnection>::GetSourceDirectory() + "/data/sql/base/db_auth/";
 }
 
 template<>
@@ -91,7 +115,8 @@ bool DBUpdater<LoginDatabaseConnection>::IsEnabled(uint32 const updateMask)
 template<>
 std::string DBUpdater<LoginDatabaseConnection>::GetDBModuleName()
 {
-    return "db-auth";
+    // must be lowercase
+    return "auth";
 }
 
 // World Database
@@ -108,9 +133,15 @@ std::string DBUpdater<WorldDatabaseConnection>::GetTableName()
 }
 
 template<>
+std::string DBUpdater<WorldDatabaseConnection>::GetSourceDirectory()
+{
+    return BuiltInConfig::GetSourceDirectory();
+}
+
+template<>
 std::string DBUpdater<WorldDatabaseConnection>::GetBaseFilesDirectory()
 {
-    return BuiltInConfig::GetSourceDirectory() + "/data/sql/base/db_world/";
+    return DBUpdater<WorldDatabaseConnection>::GetSourceDirectory() + "/data/sql/base/db_world/";
 }
 
 template<>
@@ -123,7 +154,8 @@ bool DBUpdater<WorldDatabaseConnection>::IsEnabled(uint32 const updateMask)
 template<>
 std::string DBUpdater<WorldDatabaseConnection>::GetDBModuleName()
 {
-    return "db-world";
+    // must be lowercase
+    return "world";
 }
 
 // Character Database
@@ -140,9 +172,15 @@ std::string DBUpdater<CharacterDatabaseConnection>::GetTableName()
 }
 
 template<>
+std::string DBUpdater<CharacterDatabaseConnection>::GetSourceDirectory()
+{
+    return BuiltInConfig::GetSourceDirectory();
+}
+
+template<>
 std::string DBUpdater<CharacterDatabaseConnection>::GetBaseFilesDirectory()
 {
-    return BuiltInConfig::GetSourceDirectory() + "/data/sql/base/db_characters/";
+    return DBUpdater<CharacterDatabaseConnection>::GetSourceDirectory() + "/data/sql/base/db_characters/";
 }
 
 template<>
@@ -155,8 +193,49 @@ bool DBUpdater<CharacterDatabaseConnection>::IsEnabled(uint32 const updateMask)
 template<>
 std::string DBUpdater<CharacterDatabaseConnection>::GetDBModuleName()
 {
-    return "db-characters";
+    // must be lowercase
+    return "characters";
 }
+
+#ifdef MOD_PLAYERBOTS
+// Playerbots Database
+template<>
+std::string DBUpdater<PlayerbotsDatabaseConnection>::GetConfigEntry()
+{
+    return "Updates.Playerbots";
+}
+
+template<>
+std::string DBUpdater<PlayerbotsDatabaseConnection>::GetTableName()
+{
+    return "Playerbots";
+}
+
+template<>
+std::string DBUpdater<PlayerbotsDatabaseConnection>::GetSourceDirectory()
+{
+    return BuiltInConfig::GetSourceDirectory() + "/modules/mod-playerbots";
+}
+
+template<>
+std::string DBUpdater<PlayerbotsDatabaseConnection>::GetBaseFilesDirectory()
+{
+    return DBUpdater<PlayerbotsDatabaseConnection>::GetSourceDirectory() + "/data/sql/playerbots/base/";
+}
+
+template<>
+bool DBUpdater<PlayerbotsDatabaseConnection>::IsEnabled(uint32 const updateMask)
+{
+    // This way silences warnings under msvc
+    return (updateMask & DatabaseLoader::DATABASE_PLAYERBOTS) ? true : false;
+}
+
+template<>
+std::string DBUpdater<PlayerbotsDatabaseConnection>::GetDBModuleName()
+{
+    return "db_playerbot";
+}
+#endif
 
 // All
 template<class T>
@@ -170,7 +249,7 @@ bool DBUpdater<T>::Create(DatabaseWorkerPool<T>& pool)
 {
     LOG_WARN("sql.updates", "Database \"{}\" does not exist", pool.GetConnectionInfo()->database);
 
-    const char* disableInteractive = std::getenv("AC_DISABLE_INTERACTIVE");
+    char const* disableInteractive = std::getenv("AC_DISABLE_INTERACTIVE");
 
     if (!sConfigMgr->isDryRun() && (disableInteractive == nullptr || std::strcmp(disableInteractive, "1") != 0))
     {
@@ -223,7 +302,7 @@ bool DBUpdater<T>::Update(DatabaseWorkerPool<T>& pool, std::string_view modulesL
 
     LOG_INFO("sql.updates", "Updating {} database...", DBUpdater<T>::GetTableName());
 
-    Path const sourceDirectory(BuiltInConfig::GetSourceDirectory());
+    Path const sourceDirectory(DBUpdater<T>::GetSourceDirectory());
 
     if (!is_directory(sourceDirectory))
     {
@@ -298,7 +377,7 @@ bool DBUpdater<T>::Update(DatabaseWorkerPool<T>& pool, std::vector<std::string> 
         return false;
     }
 
-    Path const sourceDirectory(BuiltInConfig::GetSourceDirectory());
+    Path const sourceDirectory(DBUpdater<T>::GetSourceDirectory());
     if (!is_directory(sourceDirectory))
     {
         return false;
@@ -395,16 +474,23 @@ bool DBUpdater<T>::Populate(DatabaseWorkerPool<T>& pool)
         return false;
     }
 
-    for (std::filesystem::directory_iterator itr(DirPath); itr != DirItr; ++itr)
-    {
-        if (itr->path().extension() != ".sql")
-            continue;
+    std::vector<std::filesystem::path> sqlFiles;
 
-        LOG_INFO("sql.updates", ">> Applying \'{}\'...", itr->path().filename().generic_string());
+    for (auto const& entry : std::filesystem::directory_iterator(DirPath))
+    {
+        if (entry.path().extension() == ".sql")
+            sqlFiles.push_back(entry.path());
+    }
+
+    std::sort(sqlFiles.begin(), sqlFiles.end());
+
+    for (auto const& file : sqlFiles)
+    {
+        LOG_INFO("sql.updates", ">> Applying \'{}\'...", file.filename().generic_string());
 
         try
         {
-            ApplyFile(pool, itr->path());
+            ApplyFile(pool, file);
         }
         catch (UpdateException&)
         {
@@ -495,17 +581,13 @@ void DBUpdater<T>::ApplyFile(DatabaseWorkerPool<T>& pool, std::string const& hos
     if (ssl == "ssl")
         args.emplace_back("--ssl-mode=REQUIRED");
 
-    // Execute sql file
-    args.emplace_back("-e");
-    args.emplace_back(Acore::StringFormat("BEGIN; SOURCE {}; COMMIT;", path.generic_string()));
-
     // Database
     if (!database.empty())
         args.emplace_back(database);
 
     // Invokes a mysql process which doesn't leak credentials to logs
     int const ret = Acore::StartProcess(DBUpdaterUtil::GetCorrectedMySQLExecutable(), args,
-        "sql.updates", "", true);
+        "sql.updates", path.generic_string(), true);
 
     if (ret != EXIT_SUCCESS)
     {
@@ -516,10 +598,24 @@ void DBUpdater<T>::ApplyFile(DatabaseWorkerPool<T>& pool, std::string const& hos
             "If you are a developer, please fix your sql query.",
             path.generic_string(), pool.GetConnectionInfo()->database);
 
-        throw UpdateException("update failed");
+        // Recorded in both modes. A dry run does not throw below, so it keeps attempting the
+        // remaining files and this count is the only thing left to fail the run on.
+        DBUpdaterUtil::MarkUpdateFailed();
+
+        if (!sConfigMgr->isDryRun())
+        {
+            if (uint32 delay = sConfigMgr->GetOption<uint32>("Updates.ExceptionShutdownDelay", 10000))
+                std::this_thread::sleep_for(Milliseconds(delay));
+
+            throw UpdateException("update failed");
+        }
     }
 }
 
 template class AC_DATABASE_API DBUpdater<LoginDatabaseConnection>;
 template class AC_DATABASE_API DBUpdater<WorldDatabaseConnection>;
 template class AC_DATABASE_API DBUpdater<CharacterDatabaseConnection>;
+
+#ifdef MOD_PLAYERBOTS
+template class AC_DATABASE_API DBUpdater<PlayerbotsDatabaseConnection>;
+#endif

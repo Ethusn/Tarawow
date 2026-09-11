@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -45,6 +45,7 @@ enum VehicleFlags
     VEHICLE_FLAG_CUSTOM_PITCH                    = 0x00000040,           // If set use pitchMin and pitchMax from DBC, otherwise pitchMin = -pi/2, pitchMax = pi/2
     VEHICLE_FLAG_ADJUST_AIM_ANGLE                = 0x00000400,           // Lua_IsVehicleAimAngleAdjustable
     VEHICLE_FLAG_ADJUST_AIM_POWER                = 0x00000800,           // Lua_IsVehicleAimPowerAdjustable
+    VEHICLE_FLAG_FIXED_POSITION                  = 0x00200000            // Used for cannons, when they should be rooted (mod_playerbots, not sure this is still valid since its only used my playerbot)
 };
 
 enum VehicleSpells
@@ -54,6 +55,14 @@ enum VehicleSpells
 
     VEHICLE_SPELL_GEIST_CONTROL_END              = 58119,
     VEHICLE_SPELL_SHADE_CONTROL_END              = 58664
+};
+
+enum class VehicleExitParameters
+{
+    VehicleExitParamNone    = 0, // provided parameters will be ignored
+    VehicleExitParamOffset  = 1, // provided parameters will be used as offset values
+    VehicleExitParamDest    = 2, // provided parameters will be used as absolute destination
+    VehicleExitParamMax
 };
 
 enum VehicleNPCs
@@ -74,9 +83,24 @@ struct PassengerInfo
     }
 };
 
+struct VehicleSeatAddon
+{
+    VehicleSeatAddon() { }
+    VehicleSeatAddon(float orientatonOffset, float exitX, float exitY, float exitZ, float exitO, uint8 param) :
+        SeatOrientationOffset(orientatonOffset), ExitParameterX(exitX), ExitParameterY(exitY), ExitParameterZ(exitZ),
+        ExitParameterO(exitO), ExitParameter(VehicleExitParameters(param)) { }
+
+    float SeatOrientationOffset = 0.f;
+    float ExitParameterX = 0.f;
+    float ExitParameterY = 0.f;
+    float ExitParameterZ = 0.f;
+    float ExitParameterO = 0.f;
+    VehicleExitParameters ExitParameter = VehicleExitParameters::VehicleExitParamNone;
+};
+
 struct VehicleSeat
 {
-    explicit VehicleSeat(VehicleSeatEntry const* seatInfo) : SeatInfo(seatInfo)
+    explicit VehicleSeat(VehicleSeatEntry const* seatInfo, VehicleSeatAddon const* seatAddon) : SeatInfo(seatInfo), SeatAddon(seatAddon)
     {
         Passenger.Reset();
     }
@@ -84,6 +108,7 @@ struct VehicleSeat
     [[nodiscard]] bool IsEmpty() const { return !Passenger.Guid; }
 
     VehicleSeatEntry const* SeatInfo;
+    VehicleSeatAddon const* SeatAddon;
     PassengerInfo Passenger;
 };
 

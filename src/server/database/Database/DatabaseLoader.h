@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -48,13 +48,22 @@ public:
         DATABASE_LOGIN      = 1,
         DATABASE_CHARACTER  = 2,
         DATABASE_WORLD      = 4,
-
+#ifdef MOD_PLAYERBOTS
+        DATABASE_PLAYERBOTS = 8,
+        DATABASE_MASK_ALL   = DATABASE_LOGIN | DATABASE_CHARACTER | DATABASE_WORLD | DATABASE_PLAYERBOTS
+#else
         DATABASE_MASK_ALL   = DATABASE_LOGIN | DATABASE_CHARACTER | DATABASE_WORLD
+#endif
     };
 
     [[nodiscard]] uint32 GetUpdateFlags() const
     {
         return _updateFlags;
+    }
+
+    void SetUpdateFlags(uint32 newUpdateFlags)
+    {
+        _updateFlags |= newUpdateFlags;
     }
 
 private:
@@ -73,7 +82,7 @@ private:
     std::string const _logger;
     std::string_view _modulesList;
     bool const _autoSetup;
-    uint32 const _updateFlags;
+    uint32 _updateFlags;
 
     std::queue<Predicate> _open, _populate, _update, _prepare;
     std::stack<Closer> _close;
